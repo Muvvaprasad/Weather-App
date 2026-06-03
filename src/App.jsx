@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react'
+// SearchPanel component exists but using inline search markup here
+import Suggestions from './components/Suggestions'
+import CurrentPanel from './components/CurrentPanel'
+import HourlyStrip from './components/HourlyStrip'
+import WeekList from './components/WeekList'
 
 const weatherCodes = {
   0: ['Clear sky', 'bi-sun-fill'],
@@ -44,11 +49,28 @@ function formatHour(value) {
 }
 
 function formatDay(value) {
+  // Normalize to local date to correctly detect Today/Tomorrow
+  const dateStr = String(value).split('T')[0]
+  const [y, m, d] = dateStr.split('-').map(Number)
+  if (!y || !m || !d) {
+    return new Intl.DateTimeFormat('en', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }).format(new Date(value))
+  }
+  const target = new Date(y, m - 1, d)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diff = Math.round((target - today) / (24 * 60 * 60 * 1000))
+  if (diff === 0) return 'Today'
+  if (diff === 1) return 'Tomorrow'
+
   return new Intl.DateTimeFormat('en', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-  }).format(new Date(value))
+  }).format(target)
 }
 
 function placeLabel(place) {
@@ -212,15 +234,11 @@ function App() {
       <section className="container py-4 py-lg-5">
         <div className="weather-toolbar d-flex flex-column flex-lg-row gap-3 align-items-lg-center justify-content-between mb-4">
           <div>
-            <p className="eyebrow mb-1">Live forecast</p>
-            <h1 className="h2 mb-0">Weather App</h1>
+            <h1 className="h2 mb-0">SkyCast</h1>
           </div>
 
           <form className="search-panel d-flex gap-2" onSubmit={handleSearch}>
             <div className="input-group">
-              <span className="input-group-text">
-                <i className="bi bi-search" aria-hidden="true"></i>
-              </span>
               <input
                 className="form-control"
                 type="search"
@@ -229,12 +247,12 @@ function App() {
                 placeholder="Search city"
                 aria-label="Search city"
               />
+              <button className="btn btn-search-inside" type="submit" aria-label="Search">
+                <i className="bi bi-search" aria-hidden="true"></i>
+              </button>
             </div>
-            <button className="btn btn-dark px-3" type="submit" disabled={loading}>
-              Search
-            </button>
             <button
-              className="btn btn-outline-dark location-btn"
+              className="btn location-btn"
               type="button"
               onClick={handleUseLocation}
               disabled={locating}
@@ -253,73 +271,12 @@ function App() {
         )}
 
         {suggestions.length > 0 && (
-          <div className="suggestions d-flex flex-wrap gap-2 mb-4">
-            {suggestions.map((item) => (
-              <button
-                className="btn btn-sm btn-light"
-                key={`${item.id}-${item.latitude}`}
-                type="button"
-                onClick={() => choosePlace(item)}
-              >
-                {placeLabel(item)}
-              </button>
-            ))}
-          </div>
+          <Suggestions suggestions={suggestions} choosePlace={choosePlace} placeLabel={placeLabel} />
         )}
 
         <div className="row g-4 align-items-stretch">
           <div className="col-lg-5">
-            <section className="current-panel h-100">
-              {loading && !weather ? (
-                <div className="loading-state">
-                  <div className="spinner-border text-light" role="status"></div>
-                  <span>Loading forecast...</span>
-                </div>
-              ) : (
-                weather &&
-                currentDetails && (
-                  <>
-                    <div className="d-flex justify-content-between gap-3">
-                      <div>
-                        <p className="small text-white-50 mb-1">Now in</p>
-                        <h2 className="h4 mb-1">{placeLabel(place)}</h2>
-                        <p className="mb-0 text-white-50">{currentDetails[0]}</p>
-                      </div>
-                      <i className={`weather-icon bi ${currentDetails[1]}`} aria-hidden="true"></i>
-                    </div>
-
-                    <div className="temperature-row">
-                      <span>{Math.round(weather.current.temperature_2m)}</span>
-                      <sup>{weather.current_units.temperature_2m}</sup>
-                    </div>
-
-                    <div className="row g-3">
-                      <div className="col-6">
-                        <div className="metric">
-                          <i className="bi bi-thermometer-half" aria-hidden="true"></i>
-                          <span>Feels like</span>
-                          <strong>{Math.round(weather.current.apparent_temperature)}{weather.current_units.apparent_temperature}</strong>
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <div className="metric">
-                          <i className="bi bi-moisture" aria-hidden="true"></i>
-                          <span>Humidity</span>
-                          <strong>{weather.current.relative_humidity_2m}%</strong>
-                        </div>
-                      </div>
-                      <div className="col-12">
-                        <div className="metric">
-                          <i className="bi bi-wind" aria-hidden="true"></i>
-                          <span>Wind speed</span>
-                          <strong>{Math.round(weather.current.wind_speed_10m)} {weather.current_units.wind_speed_10m}</strong>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )
-              )}
-            </section>
+            <CurrentPanel loading={loading} weather={weather} currentDetails={currentDetails} place={place} placeLabel={placeLabel} />
           </div>
 
           <div className="col-lg-7">
@@ -328,19 +285,7 @@ function App() {
                 <h2>Hourly forecast</h2>
                 <span>Next 12 hours</span>
               </div>
-              <div className="hourly-strip">
-                {hourlyForecast.map((item) => {
-                  const [label, icon] = describeWeather(item.code)
-                  return (
-                    <article className="hour-card" key={item.time} title={label}>
-                      <span>{formatHour(item.time)}</span>
-                      <i className={`bi ${icon}`} aria-hidden="true"></i>
-                      <strong>{item.temperature} deg</strong>
-                      <small>{item.rain}% rain</small>
-                    </article>
-                  )
-                })}
-              </div>
+              <HourlyStrip hourlyForecast={hourlyForecast} formatHour={formatHour} describeWeather={describeWeather} />
             </section>
 
             <section className="forecast-section">
@@ -348,28 +293,7 @@ function App() {
                 <h2>Weekly forecast</h2>
                 <span>7 days</span>
               </div>
-              <div className="week-list">
-                {weeklyForecast.map((item) => {
-                  const [label, icon] = describeWeather(item.code)
-                  return (
-                    <article
-                      className="day-row"
-                      key={item.time}
-                      tabIndex="0"
-                    >
-                      <div className="day-name">
-                        <strong>{formatDay(item.time)}</strong>
-                        <span>{label}</span>
-                      </div>
-                      <i className={`bi ${icon}`} aria-hidden="true"></i>
-                      <div className="day-meta">
-                        <span>{item.low} deg / {item.high} deg</span>
-                        <small>{item.rain}% rain - {item.wind} km/h</small>
-                      </div>
-                    </article>
-                  )
-                })}
-              </div>
+              <WeekList weeklyForecast={weeklyForecast} formatDay={formatDay} describeWeather={describeWeather} />
             </section>
           </div>
         </div>
